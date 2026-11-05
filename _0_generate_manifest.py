@@ -3,6 +3,8 @@ from collections import defaultdict
 import pandas as pd
 import numpy as np
 from tqdm import tqdm
+import json
+from pprint import pprint
 
 soccer_mon_path = "/home/jack/desktop/ASTRID/soccer_mon"
 game_perf       = "/home/jack/desktop/ASTRID/soccer_mon/subjective/game-performance/game-performance.csv"
@@ -15,7 +17,14 @@ sleep_quality  = "/home/jack/desktop/ASTRID/soccer_mon/subjective/wellness/sleep
 soreness       = "/home/jack/desktop/ASTRID/soccer_mon/subjective/wellness/soreness.csv"
 stress         = "/home/jack/desktop/ASTRID/soccer_mon/subjective/wellness/stress.csv"
 
+load_path = "/home/jack/desktop/ASTRID/soccer_mon/subjective/training-load"
+load_files= ["acwr.csv", "atl.csv", "ctl28.csv", "ctl42.csv", "daily_load.csv", "weekly_load.csv", "strain.csv", "monotony.csv"]
+
+session_path = "/home/jack/desktop/ASTRID/soccer_mon/subjective/training-load/session.json"
+
 save_path      = "./_0_data/"
+
+
 
 manifest = {
     "file_path" : [],
@@ -97,8 +106,91 @@ for df_name, wellness_df in zip(
     ):
     manifest[df_name] = manifest.apply(lambda X: wellness_entry(wellness_df=wellness_df, player_row=X), axis=1)
 
+for csv_file in load_files:
+    full_path = os.path.join(load_path,csv_file)
+    col = csv_file.split(".")[0]
+    df = pd.read_csv(full_path)
+    manifest[col] = manifest.apply(lambda X: wellness_entry(wellness_df=df, player_row=X), axis=1)
+
+with open(session_path, "r") as f:
+    session = json.load(f)
+
+manifest["srpe"]     = None
+manifest["rpe"]      = None
+manifest["duration"] = None
+manifest["session_count"] = None
+
+players = list(session.keys())
+for player in players:
+    player_filter= manifest["player"]== player
+    organized_sessions = defaultdict(list)
+    for session_entry in session[player]:
+        organized_sessions[session_entry["date"]].append(session_entry)
+    for session_date, session_entry_list in organized_sessions.items():
+        day, month, year = session_date.split(".")
+        session_entries  = len(session_entry_list)
+        duration         = sum([session_entry["duration"] for session_entry in session_entry_list])
+        srpe             = sum([session_entry["srpe"] for session_entry in session_entry_list])
+        rpe              = sum([session_entry["rpe"] for session_entry in session_entry_list]) / session_entries
+        year_filter  = manifest["year"]  == year
+        month_filter = manifest["month"] == month
+        day_filter   = manifest["day"]   == day
+        assert len(manifest.loc[player_filter & year_filter & month_filter & day_filter]) <= 1
+        manifest.loc[player_filter & year_filter & month_filter & day_filter, "srpe"]          = srpe
+        manifest.loc[player_filter & year_filter & month_filter & day_filter, "rpe"]           = rpe
+        manifest.loc[player_filter & year_filter & month_filter & day_filter, "duration"]      = duration
+        manifest.loc[player_filter & year_filter & month_filter & day_filter, "session_count"] = session_entries
+
+# Calculate features directly from each player's chronological manifest rows.
+manifest = manifest.sort_values(["player", "year", "month", "day"], key=lambda values: values if values.name == "player" else pd.to_numeric(values)).reset_index(drop=True)
+
+measurement_columns = ["readiness", "fatigue", "mood", "sleep_duration", "sleep_quality", "soreness", "stress", *[csv_file.removesuffix(".csv") for csv_file in load_files], "srpe", "rpe", "duration", "session_count"]
+manifest[measurement_columns] = manifest[measurement_columns].replace(-1, np.nan)
+
+# Windows count manifest rows and include the current row; standard deviations use ddof=1.
+# Undefined ratios remain missing; source values are not filled.
+manifest["daily_load_roll3_mean"] = manifest.groupby("player")["daily_load"].transform(lambda values: values.rolling(3, min_periods=2).mean())
+manifest["daily_load_roll3_sum"] = manifest.groupby("player")["daily_load"].transform(lambda values: values.rolling(3, min_periods=2).sum())
+manifest["daily_load_roll3_std"] = manifest.groupby("player")["daily_load"].transform(lambda values: values.rolling(3, min_periods=2).std())
+manifest["daily_load_roll3_cv"] = manifest["daily_load_roll3_std"] / manifest["daily_load_roll3_mean"].replace(0, np.nan)
+manifest["daily_load_roll7_mean"] = manifest.groupby("player")["daily_load"].transform(lambda values: values.rolling(7, min_periods=3).mean())
+manifest["daily_load_roll7_sum"] = manifest.groupby("player")["daily_load"].transform(lambda values: values.rolling(7, min_periods=3).sum())
+manifest["daily_load_roll7_std"] = manifest.groupby("player")["daily_load"].transform(lambda values: values.rolling(7, min_periods=3).std())
+manifest["daily_load_roll7_cv"] = manifest["daily_load_roll7_std"] / manifest["daily_load_roll7_mean"].replace(0, np.nan)
+manifest["daily_load_roll14_mean"] = manifest.groupby("player")["daily_load"].transform(lambda values: values.rolling(14, min_periods=7).mean())
+manifest["daily_load_roll14_sum"] = manifest.groupby("player")["daily_load"].transform(lambda values: values.rolling(14, min_periods=7).sum())
+manifest["daily_load_roll14_std"] = manifest.groupby("player")["daily_load"].transform(lambda values: values.rolling(14, min_periods=7).std())
+manifest["daily_load_roll14_cv"] = manifest["daily_load_roll14_std"] / manifest["daily_load_roll14_mean"].replace(0, np.nan)
+manifest["daily_load_absolute_change"] = manifest.groupby("player")["daily_load"].diff().abs()
+manifest["daily_load_roll3_mean_absolute_change"] = manifest.groupby("player")["daily_load_absolute_change"].transform(lambda values: values.rolling(3, min_periods=2).mean())
+manifest["load_7_28_ratio"] = manifest["daily_load_roll7_mean"] / manifest.groupby("player")["daily_load"].transform(lambda values: values.rolling(28, min_periods=14).mean()).replace(0, np.nan)
+manifest["fatigue_roll3_mean"] = manifest.groupby("player")["fatigue"].transform(lambda values: values.rolling(3, min_periods=2).mean())
+manifest["fatigue_roll3_std"] = manifest.groupby("player")["fatigue"].transform(lambda values: values.rolling(3, min_periods=2).std())
+manifest["fatigue_roll7_mean"] = manifest.groupby("player")["fatigue"].transform(lambda values: values.rolling(7, min_periods=3).mean())
+manifest["fatigue_roll7_std"] = manifest.groupby("player")["fatigue"].transform(lambda values: values.rolling(7, min_periods=3).std())
+manifest["mood_roll3_mean"] = manifest.groupby("player")["mood"].transform(lambda values: values.rolling(3, min_periods=2).mean())
+manifest["mood_roll3_std"] = manifest.groupby("player")["mood"].transform(lambda values: values.rolling(3, min_periods=2).std())
+manifest["mood_roll7_mean"] = manifest.groupby("player")["mood"].transform(lambda values: values.rolling(7, min_periods=3).mean())
+manifest["mood_roll7_std"] = manifest.groupby("player")["mood"].transform(lambda values: values.rolling(7, min_periods=3).std())
+manifest["sleep_duration_roll3_mean"] = manifest.groupby("player")["sleep_duration"].transform(lambda values: values.rolling(3, min_periods=2).mean())
+manifest["sleep_duration_roll3_std"] = manifest.groupby("player")["sleep_duration"].transform(lambda values: values.rolling(3, min_periods=2).std())
+manifest["sleep_duration_roll7_mean"] = manifest.groupby("player")["sleep_duration"].transform(lambda values: values.rolling(7, min_periods=3).mean())
+manifest["sleep_duration_roll7_std"] = manifest.groupby("player")["sleep_duration"].transform(lambda values: values.rolling(7, min_periods=3).std())
+manifest["sleep_quality_roll3_mean"] = manifest.groupby("player")["sleep_quality"].transform(lambda values: values.rolling(3, min_periods=2).mean())
+manifest["sleep_quality_roll3_std"] = manifest.groupby("player")["sleep_quality"].transform(lambda values: values.rolling(3, min_periods=2).std())
+manifest["sleep_quality_roll7_mean"] = manifest.groupby("player")["sleep_quality"].transform(lambda values: values.rolling(7, min_periods=3).mean())
+manifest["sleep_quality_roll7_std"] = manifest.groupby("player")["sleep_quality"].transform(lambda values: values.rolling(7, min_periods=3).std())
+manifest["soreness_roll3_mean"] = manifest.groupby("player")["soreness"].transform(lambda values: values.rolling(3, min_periods=2).mean())
+manifest["soreness_roll3_std"] = manifest.groupby("player")["soreness"].transform(lambda values: values.rolling(3, min_periods=2).std())
+manifest["soreness_roll7_mean"] = manifest.groupby("player")["soreness"].transform(lambda values: values.rolling(7, min_periods=3).mean())
+manifest["soreness_roll7_std"] = manifest.groupby("player")["soreness"].transform(lambda values: values.rolling(7, min_periods=3).std())
+manifest["stress_roll3_mean"] = manifest.groupby("player")["stress"].transform(lambda values: values.rolling(3, min_periods=2).mean())
+manifest["stress_roll3_std"] = manifest.groupby("player")["stress"].transform(lambda values: values.rolling(3, min_periods=2).std())
+manifest["stress_roll7_mean"] = manifest.groupby("player")["stress"].transform(lambda values: values.rolling(7, min_periods=3).mean())
+manifest["stress_roll7_std"] = manifest.groupby("player")["stress"].transform(lambda values: values.rolling(7, min_periods=3).std())
+
+manifest.dropna(subset=["readiness"], inplace=True)
+
 print(manifest)
 
 manifest.to_csv(save_path+"manifest.csv", index=False)
-
-
