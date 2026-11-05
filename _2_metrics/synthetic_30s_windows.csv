@@ -1,0 +1,9 @@
+window_id,midpoint_min,valid_seconds,complete,max_acceleration,longest_high_speed_s,occupied_cells,case
+0,0.25,30.0,True,50.0,8.0,13.0,matched_pairs
+1,0.75,30.0,True,0.0,0.0,1.0,matched_pairs
+2,1.25,30.0,True,0.0,0.0,1.0,matched_pairs
+3,1.75,30.0,True,0.0,0.0,1.0,matched_pairs
+0,0.25,30.0,True,50.0,8.0,13.0,swapped_gaps
+1,0.75,30.0,True,0.0,0.0,1.0,swapped_gaps
+2,1.25,30.0,True,0.0,0.0,1.0,swapped_gaps
+3,1.75,30.0,True,0.0,0.0,1.0,swapped_gaps

@@ -1,0 +1,4 @@
+case,jack_metric_per_min,activity_gap_concentration,pair_count,paired_activity_seconds,following_gap_seconds,complete_windows,candidate_windows
+real_TeamA_2020-08-03,-7.427626360836958e-05,0.020735572081987827,4,7.799999999999999,1010.1,104,108
+matched_pairs,-1.7999999999999998,0.5,2,10.0,10.0,4,4
+swapped_gaps,-1.7999999999999998,0.68,2,10.0,10.0,4,4

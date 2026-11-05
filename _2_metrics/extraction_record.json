@@ -1,0 +1,13 @@
+{
+  "real_parquet_sha256": "4ce0117926b8d84e04a31635999fb9b410200902af890e623ac2cb96b6a5fd1c",
+  "source_bytes": 9328566,
+  "raw_rows": 321149,
+  "coverage": {
+    "retained_activities": 5,
+    "censored_retained_activities": 0,
+    "complete_windows": 104,
+    "total_windows": 108,
+    "eligible_seconds": 3120.0
+  },
+  "support_rule": "Common complete 30-second windows from unchanged Jack preprocessing."
+}

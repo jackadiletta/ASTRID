@@ -1,0 +1,38 @@
+{
+  "record": {
+    "team": "A",
+    "date": "2020-08-03",
+    "source_archive": "objective-TeamA-2020.zip",
+    "source_basename": "2020-08-03-TeamA-23a7711a-8133-2876-37eb-dcd9e87a1613.parquet",
+    "member_crc32": "0287dcce",
+    "source_bytes": 9328566,
+    "prior_manifest_csv_row": 2
+  },
+  "real_parquet_sha256": "4ce0117926b8d84e04a31635999fb9b410200902af890e623ac2cb96b6a5fd1c",
+  "real_crc32_checked": "0287dcce",
+  "jack_formula_copy_unchanged": true,
+  "shared_support": "104 complete 30-second windows, 3120 seconds, same source-speed and coordinate validity.",
+  "candidate": "activity_gap_concentration = sum(D**2/(D+G))/sum(D)",
+  "input_and_code_sha256": {
+    "jack_metric.py": "89babf7b174e5c8750b98e5063baa20931c50cf1ed9ec55dc68ed44f0d547375",
+    "pair_metric.py": "704a34391c6d9ca61ada3853d9eeb4f01da7b5c943230a813fcd8f246756be93",
+    "compare_metrics.py": "10dd3fe6c7b1e41b5ca0da8609fbe4b86491b00438b3e28df1fefc6f4f128f18",
+    "test_pair_metric.py": "032ce8751f168888ff9482dff954c1ece6459ba98852d7b314b40c98ee169ca8",
+    "real_30s_windows.csv": "86d774eb6474cb91ce94be1995ce4e0726c708eee7ea35948df647dc243066aa",
+    "real_activity_gap_pairs.csv": "fca430bc55902e202155e4e156b426501f0ca0ff05a7e66897788e0eed643bfc"
+  },
+  "runtime": {
+    "python": "3.12.14",
+    "numpy": "2.5.3",
+    "pandas": "3.0.1",
+    "pyarrow": "21.0.0",
+    "matplotlib": "3.10.7"
+  },
+  "commands": [
+    "python test_pair_metric.py",
+    "python compare_metrics.py",
+    "python plot_pairs.py"
+  ],
+  "raw_verification_command": "python compare_metrics.py --parquet path/to/the/same/record.parquet",
+  "scope": "One cached real file and two constructed raw signals. No predictive training or outcome associations."
+}

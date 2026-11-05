@@ -1,0 +1,11 @@
+{
+  "status": "PASS",
+  "checks": [
+    "Known scores 0.50 and 0.68, and scale invariance: PASS",
+    "Short excluded fast activity stays inside following gap: PASS",
+    "Adjacent complete windows do not split activity: PASS",
+    "Missing time prevents a cross-block pair: PASS",
+    "Boundary-censored activity stays excluded: PASS",
+    "No terminal following gap, no complete windows gives missing: PASS"
+  ]
+}

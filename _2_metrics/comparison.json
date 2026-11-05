@@ -1,0 +1,129 @@
+{
+  "real": {
+    "case": "real_TeamA_2020-08-03",
+    "jack_metric_per_min": -7.427626360836958e-05,
+    "activity_gap_concentration": 0.020735572081987827,
+    "pair_count": 4,
+    "paired_activity_seconds": 7.799999999999999,
+    "following_gap_seconds": 1010.1,
+    "complete_windows": 104,
+    "candidate_windows": 108,
+    "component_slopes": {
+      "max_acceleration": 0.0009959121688019638,
+      "longest_high_speed_s": 0.0022788258466193327,
+      "occupied_cells": -0.003349014279029666
+    },
+    "pairs": [
+      {
+        "block_id": 1,
+        "elapsed_start_s": 1867.9,
+        "end_s": 1869.7,
+        "next_start_s": 2133.2,
+        "duration_s": 1.8,
+        "following_gap_s": 263.5
+      },
+      {
+        "block_id": 1,
+        "elapsed_start_s": 2133.2,
+        "end_s": 2135.2,
+        "next_start_s": 2709.4,
+        "duration_s": 2.0,
+        "following_gap_s": 574.2
+      },
+      {
+        "block_id": 1,
+        "elapsed_start_s": 2709.4,
+        "end_s": 2711.8,
+        "next_start_s": 2756.3,
+        "duration_s": 2.4,
+        "following_gap_s": 44.5
+      },
+      {
+        "block_id": 1,
+        "elapsed_start_s": 2756.3,
+        "end_s": 2757.9,
+        "next_start_s": 2885.8,
+        "duration_s": 1.6,
+        "following_gap_s": 127.9
+      }
+    ]
+  },
+  "synthetic": [
+    {
+      "case": "matched_pairs",
+      "jack_metric_per_min": -1.7999999999999998,
+      "activity_gap_concentration": 0.5,
+      "pair_count": 2,
+      "paired_activity_seconds": 10.0,
+      "following_gap_seconds": 10.0,
+      "complete_windows": 4,
+      "candidate_windows": 4,
+      "component_slopes": {
+        "max_acceleration": -0.6,
+        "longest_high_speed_s": -0.6,
+        "occupied_cells": -0.6
+      },
+      "pairs": [
+        {
+          "block_id": 0,
+          "elapsed_start_s": 2.0,
+          "end_s": 4.0,
+          "next_start_s": 6.0,
+          "duration_s": 2.0,
+          "following_gap_s": 2.0
+        },
+        {
+          "block_id": 0,
+          "elapsed_start_s": 6.0,
+          "end_s": 14.0,
+          "next_start_s": 22.0,
+          "duration_s": 8.0,
+          "following_gap_s": 8.0
+        }
+      ]
+    },
+    {
+      "case": "swapped_gaps",
+      "jack_metric_per_min": -1.7999999999999998,
+      "activity_gap_concentration": 0.68,
+      "pair_count": 2,
+      "paired_activity_seconds": 10.0,
+      "following_gap_seconds": 10.0,
+      "complete_windows": 4,
+      "candidate_windows": 4,
+      "component_slopes": {
+        "max_acceleration": -0.6,
+        "longest_high_speed_s": -0.6,
+        "occupied_cells": -0.6
+      },
+      "pairs": [
+        {
+          "block_id": 0,
+          "elapsed_start_s": 2.0,
+          "end_s": 4.0,
+          "next_start_s": 12.0,
+          "duration_s": 2.0,
+          "following_gap_s": 8.0
+        },
+        {
+          "block_id": 0,
+          "elapsed_start_s": 12.0,
+          "end_s": 20.0,
+          "next_start_s": 22.0,
+          "duration_s": 8.0,
+          "following_gap_s": 2.0
+        }
+      ]
+    }
+  ],
+  "formula": "sum(D * D / (D + G)) / sum(D)",
+  "candidate_unit": "dimensionless, 0 to 1",
+  "status": "Proposed feature. No predictive validation.",
+  "support": "Both scores use the same complete windows and source-speed/coordinate validity.",
+  "checks": {
+    "real_jack_matches_previous": "PASS",
+    "synthetic_scores": "PASS",
+    "same_synthetic_jack_components": "PASS",
+    "same_duration_and_gap_distributions": "PASS"
+  }
+}

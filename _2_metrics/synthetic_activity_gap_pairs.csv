@@ -1,0 +1,5 @@
+block_id,elapsed_start_s,end_s,next_start_s,duration_s,following_gap_s,case
+0,2.0,4.0,6.0,2.0,2.0,matched_pairs
+0,6.0,14.0,22.0,8.0,8.0,matched_pairs
+0,2.0,4.0,12.0,2.0,8.0,swapped_gaps
+0,12.0,20.0,22.0,8.0,2.0,swapped_gaps
