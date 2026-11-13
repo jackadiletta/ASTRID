@@ -189,6 +189,21 @@ manifest["stress_roll3_std"] = manifest.groupby("player")["stress"].transform(la
 manifest["stress_roll7_mean"] = manifest.groupby("player")["stress"].transform(lambda values: values.rolling(7, min_periods=3).mean())
 manifest["stress_roll7_std"] = manifest.groupby("player")["stress"].transform(lambda values: values.rolling(7, min_periods=3).std())
 
+# Build labels from all readiness reports, independently of the parquet filter.
+readiness_labels = readiness_df.rename(columns={readiness_df.columns[0]: "date"}).melt(id_vars="date", var_name="player", value_name="readiness").replace({"readiness": {-1: np.nan}})
+readiness_labels["date"] = pd.to_datetime(readiness_labels["date"], format="%d.%m.%Y", errors="raise")
+readiness_labels = readiness_labels.sort_values(["player", "date"]).reset_index(drop=True)
+assert not readiness_labels.duplicated(["player", "date"]).any(), "Readiness reports contain duplicate player dates."
+readiness_labels["historical_readiness_sd"] = readiness_labels.groupby("player")["readiness"].transform(lambda values: values.shift(1).expanding(min_periods=5).std())
+next_readiness = readiness_labels[["player", "date", "readiness"]].rename(columns={"readiness": "next_day_readiness"})
+next_readiness["date"] = next_readiness["date"] - pd.Timedelta(days=1)
+readiness_labels = readiness_labels.merge(next_readiness, on=["player", "date"], how="left", validate="one_to_one")
+label_eligible = readiness_labels[["readiness", "next_day_readiness", "historical_readiness_sd"]].notna().all(axis=1) & np.isfinite(readiness_labels["historical_readiness_sd"]) & readiness_labels["historical_readiness_sd"].gt(0)
+readiness_labels["readiness_decline"] = (readiness_labels["readiness"] - readiness_labels["next_day_readiness"]).ge(0.5 * readiness_labels["historical_readiness_sd"]).astype("Int64").where(label_eligible)
+manifest["date"] = pd.to_datetime(manifest[["year", "month", "day"]], errors="raise")
+manifest = manifest.merge(readiness_labels[["player", "date", "historical_readiness_sd", "next_day_readiness", "readiness_decline"]], on=["player", "date"], how="left", validate="one_to_one")
+manifest.drop(columns="date", inplace=True)
+
 manifest.dropna(subset=["readiness"], inplace=True)
 
 print(manifest)
