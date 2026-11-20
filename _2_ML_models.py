@@ -296,23 +296,26 @@ def regression_models():
 def load_experiment_data(root):
     manifest = pd.read_csv(root / "_0_data" / "manifest.csv").rename(columns={"srpe": "session_srpe"})
     manifest["date"] = pd.to_datetime(manifest[["year", "month", "day"]], errors="raise")
-    trends = pd.read_pickle(root / "_0_data" / "Session_trend_data.pkl")
-    expected_metrics = [prefix + metric for prefix in ["mmn_normalized_", "IQR_normalized_"] for metric in ["average_speed", "average_acceleration_magnitude", "average_heart_rate", "occupied_tiles"]]
+    metrics = (
+        "average_speed",
+        "average_acceleration_magnitude",
+        "average_heart_rate",
+        "occupied_tiles",
+    )
+    trend_features = [
+        f"mmn_normalized_{metric}_{stat}_mean_{days}d"
+        for metric in metrics
+        for stat in ("slope", "r_squared")
+        for days in (1, 3, 7, 14)
+    ]
+    missing = [column for column in trend_features if column not in manifest.columns]
+    if missing:
+        raise ValueError(f"Missing rolling trend columns in manifest: {missing}")
     assert len(feature_sets["Long55"]) == 55
-    assert set(trends["metric"]) == set(expected_metrics), "Unexpected or missing trend metrics"
     assert not manifest.duplicated(["player", "date"]).any(), "Duplicate manifest player-day rows"
-    assert not trends.duplicated(["file_path", "metric"]).any(), "Duplicate trend file/metric rows"
-    assert trends.groupby("file_path")["player"].nunique().eq(1).all(), "Multiple players assigned to a trend file"
-    assert trends.groupby("file_path")["metric"].nunique().eq(8).all(), "Each file must have eight trend rows"
-
-    # Player, team, dates, and labels come exclusively from the manifest.
-    trend_table = trends.pivot(index="file_path", columns="metric", values=["slope", "r_squared"])
-    trend_table.columns = [f"{metric}_{statistic}" for statistic, metric in trend_table.columns]
-    trend_features = [f"{metric}_{statistic}" for metric in expected_metrics for statistic in ["slope", "r_squared"]]
     assert manifest["file_path"].is_unique, "Duplicate manifest file paths"
-    dataset = manifest.merge(trend_table.reset_index(), on="file_path", how="left", validate="one_to_one", indicator=True)
-    assert dataset["_merge"].eq("both").all(), "Manifest files lack matching trends; finish trend generation before training"
-    dataset = dataset.drop(columns="_merge").sort_values(["date", "player"]).reset_index(drop=True)
+
+    dataset = manifest.sort_values(["date", "player"]).reset_index(drop=True)
     designs = {
         "Long55": list(feature_sets["Long55"]),
         "Long55 + Trends": list(feature_sets["Long55"]) + trend_features,
@@ -362,6 +365,7 @@ def run_saved_experiments(dataset, designs, output_directory):
     output_directory.mkdir(parents=True, exist_ok=True)
     columns = ["Model", "Feature Set", "Mode", "AUC", "F1", "Accuracy", "MSE"]
     results = []
+    prediction_frames = []
     results_path = output_directory / "experiment_results.csv"
     for mode, (target, estimators, fit_function) in tasks.items():
         train, test = splits[mode]
@@ -369,6 +373,15 @@ def run_saved_experiments(dataset, designs, output_directory):
             for model_name, estimator in estimators.items():
                 print(f"Running {mode} / {name} / {model_name}: {len(features)} features, {len(train)} train rows, {len(test)} test rows", flush=True)
                 fitted, metrics = fit_function(estimator, train[features], train[target], train["player"], test[features], test[target])
+                if mode == "regressor":
+                    predictions = test[["player", "date", target]].rename(
+                        columns={"date": "feature_date", target: "actual_readiness"}
+                    )
+                    predictions["target_date"] = predictions["feature_date"] + pd.Timedelta(days=1)
+                    predictions["predicted_readiness"] = fitted["model"].predict(test[features])
+                    predictions["model"] = model_name
+                    predictions["feature_set"] = name
+                    prediction_frames.append(predictions)
                 # Include preprocessing, feature order, and classifier threshold/calibration.
                 fitted.update({"features": list(features), "target": target, "mode": mode, "feature_set": name, "train_year": 2020, "test_year": 2021, "metrics": metrics})
                 design_slug = name.replace(" + ", "_plus_")
@@ -391,6 +404,17 @@ def run_saved_experiments(dataset, designs, output_directory):
                 temporary_results_path.replace(results_path)
                 print(result_table.tail(1).to_string(index=False), flush=True)
     assert len(results) == 18, "Expected six experiments with three models each"
+    prediction_path = output_directory / "readiness_predictions.csv"
+    temporary_prediction_path = prediction_path.with_suffix(".tmp")
+    prediction_columns = [
+        "player", "feature_date", "target_date", "actual_readiness",
+        "predicted_readiness", "model", "feature_set",
+    ]
+    predictions = pd.concat(prediction_frames, ignore_index=True)
+    predictions[prediction_columns].sort_values(
+        ["player", "target_date", "model", "feature_set"]
+    ).to_csv(temporary_prediction_path, index=False, date_format="%Y-%m-%d")
+    temporary_prediction_path.replace(prediction_path)
     print("\nAll experiment results:", flush=True)
     print(result_table.to_string(index=False), flush=True)
     print(f"Models and results saved in {output_directory}", flush=True)

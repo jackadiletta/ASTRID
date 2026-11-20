@@ -297,6 +297,47 @@ def calculate_accel_speed_space_trends(input_data):
 
     return session_trends, player_name
 
+def build_day_trends(recordings):
+    metrics = (
+        "average_speed",
+        "average_acceleration_magnitude",
+        "average_heart_rate",
+        "occupied_tiles",
+    )
+    columns = [
+        f"mmn_normalized_{metric}_{stat}"
+        for metric in metrics
+        for stat in ("slope", "r_squared")
+    ]
+
+    rows = []
+    for _, team_day in recordings.groupby(["team", "date"], sort=False):
+        windows_by_file = {}
+        for path in team_day["file_path"]:
+            windows, player = calculate_accel_speed_space_dist(path)
+            if windows is not None and not windows.empty:
+                windows_by_file[path] = windows.assign(player=player)
+
+        if not windows_by_file:
+            continue
+
+        distributions = calc_global_dists(
+            pd.concat(windows_by_file.values(), ignore_index=True)
+        )
+        for path in windows_by_file:
+            trends, _ = calculate_accel_speed_space_trends((path, distributions))
+            if trends is None or trends.empty:
+                continue
+
+            row = {"file_path": path}
+            for metric, slope, r_squared in trends.itertuples(index=False, name=None):
+                if metric.startswith("mmn_normalized_"):
+                    row[f"{metric}_slope"] = slope
+                    row[f"{metric}_r_squared"] = r_squared
+            rows.append(row)
+
+    return pd.DataFrame(rows, columns=["file_path", *columns])
+
 if __name__ == "__main__":
     output_path_session_data = Path("./_0_data/Session_chunk_data.pkl")
     manifest = pd.read_csv("/home/jack/desktop/ASTRID/_0_data/manifest.csv")
