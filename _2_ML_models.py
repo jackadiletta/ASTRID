@@ -304,7 +304,9 @@ def load_experiment_data(root):
     assert not trends.duplicated(["file_path", "metric"]).any(), "Duplicate trend file/metric rows"
     assert trends.groupby("file_path")["player"].nunique().eq(1).all(), "Multiple players assigned to a trend file"
     assert trends.groupby("file_path")["metric"].nunique().eq(8).all(), "Each file must have eight trend rows"
-
+    # trend_players = trends[["file_path", "player"]].drop_duplicates()
+    # player_check = manifest[["file_path", "player"]].merge(trend_players, on="file_path", how="left", validate="one_to_one", suffixes=("_manifest", "_trend"))
+    # assert player_check["player_manifest"].eq(player_check["player_trend"]).all(), "Manifest and trend player assignments disagree"
     # Player, team, dates, and labels come exclusively from the manifest.
     trend_table = trends.pivot(index="file_path", columns="metric", values=["slope", "r_squared"])
     trend_table.columns = [f"{metric}_{statistic}" for statistic, metric in trend_table.columns]
@@ -312,11 +314,26 @@ def load_experiment_data(root):
     assert manifest["file_path"].is_unique, "Duplicate manifest file paths"
     dataset = manifest.merge(trend_table.reset_index(), on="file_path", how="left", validate="one_to_one", indicator=True)
     assert dataset["_merge"].eq("both").all(), "Manifest files lack matching trends; finish trend generation before training"
-    dataset = dataset.drop(columns="_merge").sort_values(["date", "player"]).reset_index(drop=True)
+    dataset = dataset.drop(columns="_merge").sort_values(["player", "date"]).reset_index(drop=True)
+    dataset[trend_features] = dataset[trend_features].apply(pd.to_numeric, errors="raise")
+    dataset = dataset.rename(columns={col: f"{col}_mean_1d" for col in trend_features})
+    # Compute rolling averages separately for each player.
+    session_trend_cols = [f"{col}_mean_1d" for col in trend_features]
+    by_player = dataset.set_index("date").groupby("player")[session_trend_cols]
+    rolling_features = []
+    for days, min_obs in ((3, 2), (7, 3), (14, 7)):
+        averages = by_player.rolling(f"{days}D", min_periods=min_obs, closed="right").mean()
+        new_cols = {col: col.replace("_mean_1d", f"_mean_{days}d") for col in session_trend_cols}
+        averages = averages.rename(columns=new_cols)
+        dataset = dataset.join(averages, on=["player", "date"], validate="one_to_one")
+        rolling_features.extend(new_cols.values())
+    session_features = [f"{col}_mean_1d" for col in trend_features]
     designs = {
         "Long55": list(feature_sets["Long55"]),
-        "Long55 + Trends": list(feature_sets["Long55"]) + trend_features,
-        "Trends": trend_features,
+        "Long55 + Trends": list(feature_sets["Long55"]) + session_features,
+        "Trends": session_features,
+        "Long55 + Rolling Trends": list(feature_sets["Long55"]) + session_features + rolling_features,
+        "Rolling Trends": session_features + rolling_features,
     }
     for name, features in designs.items():
         assert len(features) == len(set(features)), f"Duplicate features in {name}"
@@ -362,6 +379,7 @@ def run_saved_experiments(dataset, designs, output_directory):
     output_directory.mkdir(parents=True, exist_ok=True)
     columns = ["Model", "Feature Set", "Mode", "AUC", "F1", "Accuracy", "MSE"]
     results = []
+    predictions = []
     results_path = output_directory / "experiment_results.csv"
     for mode, (target, estimators, fit_function) in tasks.items():
         train, test = splits[mode]
@@ -369,6 +387,20 @@ def run_saved_experiments(dataset, designs, output_directory):
             for model_name, estimator in estimators.items():
                 print(f"Running {mode} / {name} / {model_name}: {len(features)} features, {len(train)} train rows, {len(test)} test rows", flush=True)
                 fitted, metrics = fit_function(estimator, train[features], train[target], train["player"], test[features], test[target])
+                model = fitted["model"]
+                if mode == "classifier":
+                    predicted = model.predict_proba(test[features])[:, 1]
+                else:
+                    predicted = model.predict(test[features])
+                predictions.append(pd.DataFrame({
+                    "player": test["player"].to_numpy(),
+                    "date": test["date"].to_numpy(),
+                    "model": model_name,
+                    "feature_set": name,
+                    "actual": test[target].to_numpy(),
+                    "predicted": predicted,
+                    "mode": mode,
+                }))
                 # Include preprocessing, feature order, and classifier threshold/calibration.
                 fitted.update({"features": list(features), "target": target, "mode": mode, "feature_set": name, "train_year": 2020, "test_year": 2021, "metrics": metrics})
                 design_slug = name.replace(" + ", "_plus_")
@@ -390,10 +422,14 @@ def run_saved_experiments(dataset, designs, output_directory):
                 result_table.to_csv(temporary_results_path, index=False)
                 temporary_results_path.replace(results_path)
                 print(result_table.tail(1).to_string(index=False), flush=True)
-    assert len(results) == 18, "Expected six experiments with three models each"
+    expected_count = len(designs) * sum(len(estimators) for _, estimators, _ in tasks.values())
+    assert len(results) == expected_count, f"Expected {expected_count} experiments, got {len(results)}"
     print("\nAll experiment results:", flush=True)
     print(result_table.to_string(index=False), flush=True)
     print(f"Models and results saved in {output_directory}", flush=True)
+    prediction_table = pd.concat(predictions, ignore_index=True)
+    for mode, filename in [("classifier", "classifier_predictions.csv"), ("regressor", "regressor_predictions.csv")]:
+        prediction_table.loc[prediction_table["mode"] == mode].to_csv(output_directory / filename, index=False)
     return result_table
 
 

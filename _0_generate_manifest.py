@@ -202,10 +202,6 @@ label_eligible = readiness_labels[["readiness", "next_day_readiness", "historica
 readiness_labels["readiness_decline"] = (readiness_labels["readiness"] - readiness_labels["next_day_readiness"]).ge(0.5 * readiness_labels["historical_readiness_sd"]).astype("Int64").where(label_eligible)
 manifest["date"] = pd.to_datetime(manifest[["year", "month", "day"]], errors="raise")
 manifest = manifest.merge(readiness_labels[["player", "date", "historical_readiness_sd", "next_day_readiness", "readiness_decline"]], on=["player", "date"], how="left", validate="one_to_one")
-manifest.drop(columns="date", inplace=True)
-
-manifest.dropna(subset=["readiness"], inplace=True)
 
 print(manifest)
-
 manifest.to_csv(save_path+"manifest.csv", index=False)

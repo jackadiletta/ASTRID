@@ -299,7 +299,7 @@ def calculate_accel_speed_space_trends(input_data):
 
 if __name__ == "__main__":
     output_path_session_data = Path("./_0_data/Session_chunk_data.pkl")
-    manifest = pd.read_csv("/home/jack/desktop/ASTRID/_0_data/manifest.csv")
+    manifest = pd.read_csv("/home/jack/desktop/ASTRID/_0_data/manifest.csv").iloc[]
 
     sessions = []
     if output_path_session_data.exists():
@@ -342,13 +342,13 @@ if __name__ == "__main__":
     if output_path_session_trends.exists():
         all_session_trends = pd.read_pickle(output_path_session_trends)
         processed_files = all_session_trends["file_path"].unique()
-        manifest = manifest.loc[~manifest["file_path"].isin(processed_files)]
+        unfinished_manifest = manifest.loc[~manifest["file_path"].isin(processed_files)]
         session_trends = [all_session_trends]
 
-    manifest = manifest.sort_values("file_path")
+    unfinished_manifest = manifest.sort_values("file_path")
 
     with ProcessPoolExecutor(max_workers=8) as executor:
-        futures = {executor.submit(calculate_accel_speed_space_trends, (file_path, distribution_data.copy())): file_path for file_path in manifest["file_path"].drop_duplicates()}
+        futures = {executor.submit(calculate_accel_speed_space_trends, (file_path, distribution_data.copy())): file_path for file_path in unfinished_manifest["file_path"].drop_duplicates()}
 
         for future in tqdm(as_completed(futures), total=len(futures)):
             file_path = futures[future]
@@ -365,4 +365,3 @@ if __name__ == "__main__":
             temporary_path = output_path_session_trends.with_suffix(".tmp")
             all_session_trends.to_pickle(temporary_path)
             temporary_path.replace(output_path_session_trends)
-    
