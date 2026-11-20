@@ -5,6 +5,7 @@ import numpy as np
 from tqdm import tqdm
 import json
 from pprint import pprint
+from _1_advanced_metrics import build_day_trends
 
 soccer_mon_path = "/home/jack/desktop/ASTRID/soccer_mon"
 game_perf       = "/home/jack/desktop/ASTRID/soccer_mon/subjective/game-performance/game-performance.csv"
@@ -202,6 +203,26 @@ label_eligible = readiness_labels[["readiness", "next_day_readiness", "historica
 readiness_labels["readiness_decline"] = (readiness_labels["readiness"] - readiness_labels["next_day_readiness"]).ge(0.5 * readiness_labels["historical_readiness_sd"]).astype("Int64").where(label_eligible)
 manifest["date"] = pd.to_datetime(manifest[["year", "month", "day"]], errors="raise")
 manifest = manifest.merge(readiness_labels[["player", "date", "historical_readiness_sd", "next_day_readiness", "readiness_decline"]], on=["player", "date"], how="left", validate="one_to_one")
+
+day_trends = build_day_trends(manifest)
+trend_cols = day_trends.columns.drop("file_path").tolist()
+
+manifest = manifest.merge(
+    day_trends, on="file_path", how="left", validate="one_to_one"
+).sort_values(["player", "date"])
+
+by_player = manifest.set_index("date").groupby("player")[trend_cols]
+
+for days, min_obs in ((3, 2), (7, 3), (14, 7)):
+    averages = (
+        by_player.rolling(f"{days}D", min_periods=min_obs, closed="right")
+        .mean()
+        .add_suffix(f"_mean_{days}d")
+    )
+    manifest = manifest.join(averages, on=["player", "date"], validate="one_to_one")
+
+manifest = manifest.rename(columns={col: f"{col}_mean_1d" for col in trend_cols})
+
 manifest.drop(columns="date", inplace=True)
 
 manifest.dropna(subset=["readiness"], inplace=True)
